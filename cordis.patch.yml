@@ -1,0 +1,15 @@
+# dsh-complete-notify bundle patch: one insert over the profile tree.
+#
+# The plugin row activates only when this package is installed as a profile
+# dependency (e.g. `dsh plugin --profile web add link:<dir>`).
+#
+# All behavior lives in the browser client (sound + toast + system
+# notification); the host half is a no-op. Runtime preferences are managed
+# in 设置 → 任务完成通知 and persisted to browser localStorage.
+#
+# IMPORTANT: this is an `insert`. Do not ALSO declare a top-level `- id:`
+# entry for the same id in your own cordis.patch.yml, or the plugin would
+# register twice (double sound / double notification).
+- insert:
+    - id: complete-notify
+      name: 'dsh-complete-notify'

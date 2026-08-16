@@ -1,0 +1,68 @@
+{
+  "name": "dsh-complete-notify",
+  "version": "0.1.0",
+  "description": "任务完成时播放提示音并弹出小通知（页面内 toast + 后台时系统通知）。纯浏览器方案，零系统依赖，跨 Windows/macOS/Linux。",
+  "type": "module",
+  "license": "MIT",
+  "author": "kaixinbaba",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaixinbaba/dsh-complete-notify.git"
+  },
+  "homepage": "https://github.com/kaixinbaba/dsh-complete-notify#readme",
+  "bugs": {
+    "url": "https://github.com/kaixinbaba/dsh-complete-notify/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib",
+    "client",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "notification",
+    "sound",
+    "toast",
+    "任务完成",
+    "通知",
+    "音效"
+  ],
+  "dsh": {
+    "category": "extension",
+    "displayName": "任务完成通知",
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check client/client.js && node --check lib/index.js && node --check tests/helpers.js && node --check tests/watcher.test.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  }
+}
