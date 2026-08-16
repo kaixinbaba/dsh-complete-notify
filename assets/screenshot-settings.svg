@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1320"/>
+      <stop offset="1" stop-color="#182338"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+
+  <!-- 设置面板 -->
+  <g transform="translate(150, 90)" font-family="PingFang SC, Helvetica, sans-serif">
+    <rect width="900" height="620" rx="18" fill="#131926" stroke="#2a3346" stroke-width="2"/>
+    <text x="46" y="60" font-size="34" font-weight="700" fill="#f2f4f8">任务完成通知</text>
+    <text x="48" y="100" font-size="20" fill="#8fa2b8">任务完成时播放提示音并弹出小通知；页面在后台时改用系统通知。</text>
+
+    <!-- 行 -->
+    <g font-size="24" fill="#dbe4f0">
+      <text x="48" y="180">启用提醒</text>
+      <rect x="800" y="158" width="52" height="28" rx="14" fill="#4ade80"/>
+      <circle cx="838" cy="172" r="11" fill="#ffffff"/>
+
+      <text x="48" y="270">提示音</text>
+      <rect x="800" y="248" width="52" height="28" rx="14" fill="#4ade80"/>
+      <circle cx="838" cy="262" r="11" fill="#ffffff"/>
+
+      <text x="48" y="360">系统通知（页面在后台时）</text>
+      <rect x="800" y="338" width="52" height="28" rx="14" fill="#4ade80"/>
+      <circle cx="838" cy="352" r="11" fill="#ffffff"/>
+
+      <text x="48" y="450">音量</text>
+      <rect x="180" y="430" width="300" height="8" rx="4" fill="#2a3346"/>
+      <rect x="180" y="430" width="180" height="8" rx="4" fill="#4ade80"/>
+      <circle cx="360" cy="434" r="13" fill="#f2f4f8"/>
+      <text x="510" y="446" font-size="20" fill="#8fa2b8">60%</text>
+    </g>
+
+    <!-- 按钮 -->
+    <g>
+      <rect x="48" y="500" width="150" height="52" rx="12" fill="#1e2838" stroke="#3a4b66" stroke-width="2"/>
+      <text x="108" y="534" font-size="22" fill="#dbe4f0" text-anchor="middle">测试音效</text>
+      <rect x="214" y="500" width="150" height="52" rx="12" fill="#1e2838" stroke="#3a4b66" stroke-width="2"/>
+      <text x="274" y="534" font-size="22" fill="#dbe4f0" text-anchor="middle">测试通知</text>
+    </g>
+
+    <circle cx="56" cy="590" r="8" fill="#4ade80"/>
+    <text x="76" y="597" font-size="20" fill="#8fa2b8">系统通知权限：已授权 · 设置保存在当前浏览器</text>
+  </g>
+
+  <g font-family="PingFang SC, Helvetica, sans-serif" text-anchor="middle">
+    <text x="600" y="758" font-size="24" fill="#9fb2c8">设置 → 任务完成通知</text>
+  </g>
+</svg>

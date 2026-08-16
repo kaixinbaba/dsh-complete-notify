@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1320"/>
+      <stop offset="1" stop-color="#182338"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+
+  <!-- toast 卡片 -->
+  <g transform="translate(280, 210)">
+    <rect width="640" height="190" rx="20" fill="#181b22" stroke="#2a2f3a" stroke-width="2"/>
+    <circle cx="64" cy="80" r="28" fill="#4ade80"/>
+    <path d="M50 80 l10 10 l20 -20" stroke="#0d1320" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="112" y="94" font-family="PingFang SC, Helvetica, sans-serif" font-size="44" font-weight="700" fill="#f2f4f8">任务完成</text>
+    <text x="114" y="146" font-family="PingFang SC, Helvetica, sans-serif" font-size="29" fill="#9fb2c8">修复登录 · session 3f9a…</text>
+    <text x="596" y="52" font-family="PingFang SC, Helvetica, sans-serif" font-size="34" fill="#5b6b80">×</text>
+    <text x="114" y="176" font-family="PingFang SC, Helvetica, sans-serif" font-size="20" fill="#5b6b80">刚刚</text>
+  </g>
+
+  <g font-family="PingFang SC, Helvetica, sans-serif" text-anchor="middle">
+    <text x="600" y="500" font-size="34" font-weight="600" fill="#f2f4f8">页面内 Toast 弹窗</text>
+    <text x="600" y="548" font-size="24" fill="#9fb2c8">点击跳转到会话 · 5 秒自动消失 · 最多同时 3 条</text>
+  </g>
+</svg>

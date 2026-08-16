@@ -1,5 +1,9 @@
 # dsh-complete-notify
 
+<p align="center">
+  <img src="assets/cover.png" alt="dsh-complete-notify cover" width="720">
+</p>
+
 DeepSeek Harness（DSH）任务完成通知插件：任务完成时播放**提示音**并弹出**小通知**。
 
 - **纯浏览器方案**：音效用 Web Audio 合成、弹窗是页面内 toast、页面在后台时改用系统通知（Web Notification API）——零系统依赖、零音频文件，Windows / macOS / Linux 通用

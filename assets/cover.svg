@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1320"/>
+      <stop offset="1" stop-color="#182338"/>
+    </linearGradient>
+    <pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.2" fill="#ffffff" opacity="0.05"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#dots)"/>
+
+  <!-- 左侧文字 -->
+  <g font-family="PingFang SC, Helvetica, sans-serif">
+    <rect x="90" y="120" width="188" height="46" rx="23" fill="#4ade80" opacity="0.14"/>
+    <text x="118" y="150" font-size="22" font-weight="600" letter-spacing="3" fill="#4ade80">DSH PLUGIN</text>
+
+    <text x="90" y="270" font-size="76" font-weight="700" fill="#f2f4f8">任务完成通知</text>
+    <text x="92" y="326" font-size="30" fill="#9fb2c8">dsh-complete-notify — 音效 + 小弹窗 · 纯浏览器 · 跨平台</text>
+
+    <line x1="94" y1="366" x2="640" y2="366" stroke="#2a3346" stroke-width="2"/>
+
+    <g font-size="27" fill="#dbe4f0">
+      <circle cx="100" cy="424" r="12" fill="#4ade80"/>
+      <text x="126" y="432">Web Audio 合成「叮咚」提示音（零音频文件）</text>
+      <circle cx="100" cy="482" r="12" fill="#4ade80"/>
+      <text x="126" y="490">页面内右上角 toast 弹窗，点击直达会话</text>
+      <circle cx="100" cy="540" r="12" fill="#4ade80"/>
+      <text x="126" y="548">页面在后台时发送系统通知 + 标题闪烁</text>
+    </g>
+
+    <rect x="90" y="700" width="680" height="64" rx="14" fill="#0a0f18" stroke="#2a3346" stroke-width="2"/>
+    <text x="118" y="741" font-family="Menlo, monospace" font-size="27" fill="#7dd3a8">dsh plugin add dsh-complete-notify</text>
+    <text x="92" y="812" font-size="20" fill="#5b6b80">Windows / macOS / Linux 通用 · 仅需浏览器通知权限</text>
+  </g>
+
+  <!-- 右侧：toast 卡片 -->
+  <g transform="translate(930, 150)">
+    <rect width="560" height="170" rx="18" fill="#181b22" stroke="#2a2f3a" stroke-width="2"/>
+    <circle cx="52" cy="70" r="24" fill="#4ade80"/>
+    <path d="M42 70 l8 8 l16 -16" stroke="#0d1320" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="92" y="82" font-family="PingFang SC, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#f2f4f8">任务完成</text>
+    <text x="94" y="130" font-family="PingFang SC, Helvetica, sans-serif" font-size="26" fill="#9fb2c8">修复登录 · session 3f9a…</text>
+    <text x="520" y="52" font-family="PingFang SC, Helvetica, sans-serif" font-size="30" fill="#5b6b80">×</text>
+    <text x="94" y="158" font-family="PingFang SC, Helvetica, sans-serif" font-size="18" fill="#5b6b80">刚刚</text>
+  </g>
+
+  <!-- 右侧：音效 EQ 条 -->
+  <g transform="translate(980, 420)">
+    <g fill="#4ade80">
+      <rect x="0" y="40" width="18" height="60" rx="9" opacity="0.5"/>
+      <rect x="34" y="10" width="18" height="90" rx="9" opacity="0.85"/>
+      <rect x="68" y="30" width="18" height="70" rx="9" opacity="0.6"/>
+      <rect x="102" y="0" width="18" height="100" rx="9" opacity="1"/>
+      <rect x="136" y="20" width="18" height="80" rx="9" opacity="0.7"/>
+      <rect x="170" y="45" width="18" height="55" rx="9" opacity="0.5"/>
+      <rect x="204" y="15" width="18" height="85" rx="9" opacity="0.9"/>
+      <rect x="238" y="35" width="18" height="65" rx="9" opacity="0.6"/>
+      <rect x="272" y="5" width="18" height="95" rx="9" opacity="0.95"/>
+      <rect x="306" y="25" width="18" height="75" rx="9" opacity="0.7"/>
+      <rect x="340" y="50" width="18" height="50" rx="9" opacity="0.45"/>
+      <rect x="374" y="15" width="18" height="85" rx="9" opacity="0.85"/>
+    </g>
+    <text x="0" y="170" font-family="PingFang SC, Helvetica, sans-serif" font-size="24" fill="#5b6b80">叮咚 · AudioContext 合成</text>
+  </g>
+</svg>
