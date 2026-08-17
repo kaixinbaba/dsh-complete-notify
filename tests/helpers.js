@@ -46,6 +46,10 @@ export const inferKind = bundle.__test.inferKind
 export const kindMeta = bundle.__test.kindMeta
 export const emitTest = bundle.__test.emitTest
 export const onTest = bundle.__test.onTest
+export const soundIdForKind = bundle.__test.soundIdForKind
+export const defaultSounds = bundle.__test.defaultSounds
+export const detectPlatform = bundle.__test.detectPlatform
+export const soundPresetIds = bundle.__test.soundPresetIds
 
 /** 简体中文文案 stub（t('key') → 值）。 */
 export const tZh = (key) => ({

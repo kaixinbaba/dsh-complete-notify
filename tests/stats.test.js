@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, emitTest, onTest, tZh } from './helpers.js'
+import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, emitTest, onTest, soundIdForKind, defaultSounds, detectPlatform, soundPresetIds, tZh } from './helpers.js'
 
 /** 构造最小会话快照。 */
 function snap({ timings, nodes }) {
@@ -127,4 +127,25 @@ test('状态预览事件：onTest 订阅 / emitTest 触发 / 退订', () => {
   off()
   emitTest('completed')
   assert.deepEqual(seen, ['blocked', 'aborted'])
+})
+
+test('音效映射：三状态独立，error/max-tokens 复用红/黄音效', () => {
+  const sounds = { completed: 'mac-glass', blocked: 'mac-pop', aborted: 'mac-basso' }
+  assert.equal(soundIdForKind('completed', sounds), 'mac-glass')
+  assert.equal(soundIdForKind('blocked', sounds), 'mac-pop')
+  assert.equal(soundIdForKind('aborted', sounds), 'mac-basso')
+  assert.equal(soundIdForKind('error', sounds), 'mac-basso')
+  assert.equal(soundIdForKind('max-tokens', sounds), 'mac-pop')
+  assert.equal(soundIdForKind('unknown', sounds), 'mac-glass')
+})
+
+test('音效预设：有 OS 默认映射和静音选项', () => {
+  const defaults = defaultSounds()
+  assert.equal(typeof defaults.completed, 'string')
+  assert.equal(typeof defaults.blocked, 'string')
+  assert.equal(typeof defaults.aborted, 'string')
+  assert.ok(['macos', 'windows', 'linux', 'other'].includes(detectPlatform()))
+  assert.ok(soundPresetIds.includes('silent'))
+  assert.ok(soundPresetIds.includes('soft-chime'))
+  assert.ok(soundPresetIds.length >= 10)
 })

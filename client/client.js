@@ -25,6 +25,117 @@ const { useState, useEffect, useRef } = React
 const NS = 'complete-notify'
 const STORAGE_KEY = 'dsh.completeNotify.v1'
 const DEFAULT_CFG = { enabled: true, sound: true, systemNotify: true, volume: 0.6 }
+
+// ---------- 跨平台音效预设（Web Audio 合成，不读取系统原生声音文件） ----------
+// 每个预设只描述振荡器频率/时序/波形；因此 Windows/macOS/Linux 都能用。
+const SOUND_PRESETS = {
+  'soft-chime': {
+    notes: [{ freq: 880, start: 0, dur: 0.4 }, { freq: 1174.66, start: 0.13, dur: 0.5 }],
+    decay: 0.7,
+  },
+  digital: {
+    notes: [{ freq: 1046.5, start: 0, dur: 0.12, type: 'square' }, { freq: 1568, start: 0.14, dur: 0.18, type: 'square' }, { freq: 2093, start: 0.34, dur: 0.24, type: 'triangle' }],
+    decay: 0.7,
+  },
+  pop: {
+    notes: [{ freq: 520, start: 0, dur: 0.12, type: 'sine' }, { freq: 760, start: 0.08, dur: 0.18, type: 'sine' }],
+    decay: 0.4,
+  },
+  'mac-glass': {
+    notes: [{ freq: 1318.5, start: 0, dur: 0.28, type: 'sine' }, { freq: 1760, start: 0.08, dur: 0.42, type: 'sine' }],
+    decay: 0.65,
+  },
+  'mac-pop': {
+    notes: [{ freq: 740, start: 0, dur: 0.14, type: 'sine' }, { freq: 1110, start: 0.1, dur: 0.22, type: 'sine' }],
+    decay: 0.45,
+  },
+  'mac-basso': {
+    notes: [{ freq: 196, start: 0, dur: 0.32, type: 'triangle' }, { freq: 147, start: 0.16, dur: 0.5, type: 'triangle' }],
+    decay: 0.75,
+  },
+  'win-chime': {
+    notes: [{ freq: 659.25, start: 0, dur: 0.2, type: 'sine' }, { freq: 987.77, start: 0.16, dur: 0.32, type: 'sine' }],
+    decay: 0.55,
+  },
+  'win-alert': {
+    notes: [{ freq: 523.25, start: 0, dur: 0.18, type: 'square' }, { freq: 659.25, start: 0.2, dur: 0.18, type: 'square' }],
+    decay: 0.55,
+  },
+  'win-error': {
+    notes: [{ freq: 330, start: 0, dur: 0.2, type: 'sawtooth' }, { freq: 220, start: 0.18, dur: 0.3, type: 'sawtooth' }],
+    decay: 0.65,
+  },
+  'linux-complete': {
+    notes: [{ freq: 784.88, start: 0, dur: 0.2, type: 'sine' }, { freq: 1174.66, start: 0.15, dur: 0.34, type: 'sine' }],
+    decay: 0.6,
+  },
+  'linux-bell': {
+    notes: [{ freq: 659.25, start: 0, dur: 0.28, type: 'triangle' }, { freq: 880, start: 0.12, dur: 0.42, type: 'triangle' }],
+    decay: 0.7,
+  },
+  'linux-alert': {
+    notes: [{ freq: 293.66, start: 0, dur: 0.2, type: 'square' }, { freq: 440, start: 0.22, dur: 0.25, type: 'square' }],
+    decay: 0.65,
+  },
+  silent: { notes: [], decay: 0 },
+}
+
+const SOUND_LABELS = {
+  'soft-chime': { zh: '柔和叮咚', en: 'Soft chime' },
+  digital: { zh: '数字提示', en: 'Digital' },
+  pop: { zh: '轻快弹跳', en: 'Light pop' },
+  'mac-glass': { zh: 'macOS Glass 风格', en: 'macOS Glass style' },
+  'mac-pop': { zh: 'macOS Pop 风格', en: 'macOS Pop style' },
+  'mac-basso': { zh: 'macOS Basso 风格', en: 'macOS Basso style' },
+  'win-chime': { zh: 'Windows Chime 风格', en: 'Windows Chime style' },
+  'win-alert': { zh: 'Windows Alert 风格', en: 'Windows Alert style' },
+  'win-error': { zh: 'Windows Error 风格', en: 'Windows Error style' },
+  'linux-complete': { zh: 'Linux Complete 风格', en: 'Linux Complete style' },
+  'linux-bell': { zh: 'Linux Bell 风格', en: 'Linux Bell style' },
+  'linux-alert': { zh: 'Linux Alert 风格', en: 'Linux Alert style' },
+  silent: { zh: '静音', en: 'Silent' },
+}
+
+const SOUND_OS_GROUPS = {
+  macos: ['mac-glass', 'mac-pop', 'mac-basso'],
+  windows: ['win-chime', 'win-alert', 'win-error'],
+  linux: ['linux-complete', 'linux-bell', 'linux-alert'],
+  other: ['soft-chime', 'digital', 'pop'],
+}
+const SOUND_DEFAULTS = {
+  macos: { completed: 'mac-glass', blocked: 'mac-pop', aborted: 'mac-basso' },
+  windows: { completed: 'win-chime', blocked: 'win-alert', aborted: 'win-error' },
+  linux: { completed: 'linux-complete', blocked: 'linux-bell', aborted: 'linux-alert' },
+  other: { completed: 'soft-chime', blocked: 'digital', aborted: 'pop' },
+}
+const SOUND_UNIVERSAL = ['soft-chime', 'digital', 'pop', 'silent']
+
+function detectPlatform() {
+  if (typeof navigator === 'undefined') return 'other'
+  const raw = String(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '').toLowerCase()
+  if (raw.includes('mac')) return 'macos'
+  if (raw.includes('win')) return 'windows'
+  if (raw.includes('linux')) return 'linux'
+  return 'other'
+}
+function defaultSounds() {
+  return Object.assign({}, SOUND_DEFAULTS[detectPlatform()] || SOUND_DEFAULTS.other)
+}
+function soundLabel(id, t) {
+  const label = SOUND_LABELS[id]
+  if (!label) return id
+  const locale = t('soundLocale')
+  return locale === 'en' ? label.en : label.zh
+}
+function soundGroups(t) {
+  const platform = detectPlatform()
+  const osLabel = { macos: 'macOS', windows: 'Windows', linux: 'Linux', other: t('soundUniversal') }[platform]
+  return [
+    { label: t('soundRecommended') + ' · ' + osLabel, ids: SOUND_OS_GROUPS[platform] || SOUND_OS_GROUPS.other },
+    { label: t('soundUniversal'), ids: SOUND_UNIVERSAL },
+  ]
+}
+
 const TOAST_MS = 5000       // 页面可见时的 toast 停留
 const TOAST_MS_BG = 30000   // 后台完成、用户稍后回来也能看到的停留
 const MAX_TOASTS = 3
@@ -56,6 +167,13 @@ const zh = {
   testAborted: '测试中断',
   testToastTitle: '测试会话',
   testToastRecap: '这是一条测试小结，用于预览不同状态的提醒效果。',
+  soundCompleted: '绿色 · 任务完成音效',
+  soundBlocked: '黄色 · 阻塞音效',
+  soundAborted: '红色 · 中断音效',
+  soundRecommended: '当前系统推荐',
+  soundUniversal: '通用预设',
+  soundLocale: 'zh',
+  soundHint: '音效为浏览器 Web Audio 合成风格，不读取系统原生音频文件。',
   permGranted: '系统通知权限：已授权',
   permDenied: '系统通知权限：已拒绝（在浏览器地址栏左侧的站点设置中开启）',
   permDefault: '系统通知权限：未授权 —— 点击「测试通知」完成授权',
@@ -87,6 +205,13 @@ const en = {
   testAborted: 'Test interrupted',
   testToastTitle: 'Test session',
   testToastRecap: 'A test recap to preview the state color.',
+  soundCompleted: 'Green · completed sound',
+  soundBlocked: 'Yellow · blocked sound',
+  soundAborted: 'Red · interrupted sound',
+  soundRecommended: 'Recommended for this OS',
+  soundUniversal: 'Universal presets',
+  soundLocale: 'en',
+  soundHint: 'Sounds are synthesized by browser Web Audio; system audio files are not read.',
   permGranted: 'Notification permission: granted',
   permDenied: 'Notification permission: denied (enable it in the site settings beside the address bar)',
   permDefault: 'Notification permission: not granted — click "Test notification" to grant it',
@@ -94,17 +219,26 @@ const en = {
 }
 
 // ---------- 配置（localStorage 持久化） ----------
+function defaultCfg() {
+  return Object.assign({}, DEFAULT_CFG, { sounds: defaultSounds() })
+}
 function getCfg() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return Object.assign({}, DEFAULT_CFG)
-    return Object.assign({}, DEFAULT_CFG, JSON.parse(raw))
+    const defaults = defaultCfg()
+    if (!raw) return defaults
+    const stored = JSON.parse(raw)
+    return Object.assign({}, defaults, stored, {
+      sounds: Object.assign({}, defaults.sounds, stored && stored.sounds ? stored.sounds : {}),
+    })
   } catch (err) {
-    return Object.assign({}, DEFAULT_CFG)
+    return defaultCfg()
   }
 }
 function setCfg(patch) {
-  const next = Object.assign({}, getCfg(), patch)
+  const next = Object.assign({}, getCfg(), patch, {
+    sounds: Object.assign({}, getCfg().sounds, patch && patch.sounds ? patch.sounds : {}),
+  })
   try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch (err) {}
   return next
 }
@@ -201,42 +335,55 @@ function unlockAudio() {
   if (ctx === null) return
   if (ctx.state === 'suspended') { try { ctx.resume() } catch (err) {} }
 }
-/** 合成双音「叮咚」（880Hz → 1174.66Hz，指数衰减包络）。失败静默。 */
-function chime(volume) {
+/** 播放指定预设；音效失败静默，不影响 toast/系统通知。 */
+function playSound(soundId, volume) {
+  const preset = SOUND_PRESETS[soundId] || SOUND_PRESETS['soft-chime']
+  if (!preset || !Array.isArray(preset.notes) || preset.notes.length === 0) return
   const vol = typeof volume === 'number' && volume >= 0 && volume <= 1 ? volume : 0.6
   const ctx = ensureAudio()
   if (ctx === null) return
   const play = () => {
     try {
       const t0 = ctx.currentTime
+      const decay = preset.decay || 0.6
       const master = ctx.createGain()
       master.gain.setValueAtTime(vol, t0)
-      master.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7)
+      master.gain.exponentialRampToValueAtTime(0.0001, t0 + decay)
       master.connect(ctx.destination)
-      const notes = [
-        { freq: 880.0, start: 0.0, dur: 0.4 },
-        { freq: 1174.66, start: 0.13, dur: 0.5 },
-      ]
-      for (const n of notes) {
+      for (const n of preset.notes) {
         const osc = ctx.createOscillator()
-        osc.type = 'sine'
+        osc.type = n.type || 'sine'
         osc.frequency.setValueAtTime(n.freq, t0 + n.start)
         const g = ctx.createGain()
+        const gain = typeof n.gain === 'number' ? n.gain : 0.5
         g.gain.setValueAtTime(0.0001, t0 + n.start)
-        g.gain.exponentialRampToValueAtTime(0.5, t0 + n.start + 0.02)
+        g.gain.exponentialRampToValueAtTime(gain, t0 + n.start + 0.02)
         g.gain.exponentialRampToValueAtTime(0.0001, t0 + n.start + n.dur)
         osc.connect(g)
         g.connect(master)
         osc.start(t0 + n.start)
         osc.stop(t0 + n.start + n.dur + 0.05)
       }
-    } catch (err) { /* 静默：音效失败不影响通知 */ }
+    } catch (err) { /* 静默 */ }
   }
   if (ctx.state === 'suspended') {
     ctx.resume().then(() => { if (ctx.state === 'running') play() }).catch(() => {})
   } else {
     play()
   }
+}
+function soundIdForKind(kind, sounds) {
+  const map = sounds || {}
+  const category = kind === 'error' ? 'aborted' : kind === 'max-tokens' ? 'blocked' : kind
+  return map[category] || map.completed || 'soft-chime'
+}
+function playKindSound(kind, volume, cfg) {
+  if (!cfg || cfg.sound === false) return
+  playSound(soundIdForKind(kind, cfg.sounds), volume)
+}
+/** 兼容旧调用：默认绿色完成音效。 */
+function chime(volume) {
+  playSound('soft-chime', volume)
 }
 
 // ---------- 系统通知（Web Notification API） ----------
@@ -568,7 +715,7 @@ function ToastHost(props) {
   useEffect(() => onTest((kind) => {
     const cfg = getCfg()
     if (cfg.enabled === false) return
-    if (cfg.sound) chime(cfg.volume)
+    playKindSound(kind, cfg.volume, cfg)
     pushTestToast(kind)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [])
@@ -585,13 +732,13 @@ function ToastHost(props) {
     ;(async () => {
       for (const ev of events) {
         if (cancelled) return
-        if (cfg.sound) chime(cfg.volume)
         const info = collectRunInfo(sessions, ev.sessionId)
         const statsLine = buildStatsLine(info ? info.stats : null, t)
         const fallbackRecap = cleanRecap(info ? info.answer : '')
         const eventKind = ev.kind || null // 阻塞事件自带 'blocked'
         const provisionalKind = eventKind || (info && info.kind) || 'completed'
         if (visible) {
+          playKindSound(provisionalKind, cfg.volume, cfg)
           const key = pushToast(ev, statsLine, fallbackRecap, provisionalKind, TOAST_MS)
           refreshInfo(key, ev.sessionId)
         } else if (cfg.systemNotify) {
@@ -600,6 +747,7 @@ function ToastHost(props) {
           if (cancelled) return
           const kind = eventKind || (info2 && info2.kind) || provisionalKind
           const meta = kindMeta(kind, t)
+          playKindSound(kind, cfg.volume, cfg)
           const shown = showSystemNotification({
             title: meta.label,
             body: ev.title + (fallbackRecap ? '\n💬 ' + fallbackRecap : '') + (statsLine ? '\n' + statsLine : ''),
@@ -614,6 +762,7 @@ function ToastHost(props) {
           }
         } else {
           flashTitle('⚠ ' + kindMeta(provisionalKind, t).label)
+          playKindSound(provisionalKind, cfg.volume, cfg)
           const key = pushToast(ev, statsLine, fallbackRecap, provisionalKind, TOAST_MS_BG)
           refreshInfo(key, ev.sessionId)
         }
@@ -697,12 +846,22 @@ function Row(props) {
     props.children)
 }
 
+function SoundSelect(props) {
+  const { kind, cfg, t, onChange } = props
+  const current = cfg.sounds && cfg.sounds[kind] ? cfg.sounds[kind] : defaultSounds()[kind]
+  const selectStyle = { width: 210, maxWidth: '58%', padding: '4px 7px', borderRadius: 6, border: '1px solid rgba(127,127,127,0.4)', background: 'transparent', color: 'inherit', fontSize: 12 }
+  return h('select', { value: current, style: selectStyle, onChange: (e) => onChange(kind, e.target.value) },
+    soundGroups(t).map((group) => h('optgroup', { key: group.label, label: group.label },
+      group.ids.map((id) => h('option', { key: id, value: id }, soundLabel(id, t))))))
+}
+
 function SettingsPage(props) {
   const t = props.t
   const [cfg, setCfgState] = useState(() => getCfg())
   const [perm, setPerm] = useState(() => notificationPermission())
 
   const update = (patch) => setCfgState(setCfg(patch))
+  const updateSound = (kind, soundId) => setCfgState(setCfg({ sounds: Object.assign({}, cfg.sounds, { [kind]: soundId }) }))
 
   const permText = () => {
     if (perm === 'granted') return t('permGranted')
@@ -739,8 +898,12 @@ function SettingsPage(props) {
         onChange: (e) => update({ volume: Number(e.target.value) / 100 }),
         style: { width: 150 },
       })),
+    h(Row, { label: t('soundCompleted') }, h(SoundSelect, { kind: 'completed', cfg, t, onChange: updateSound })),
+    h(Row, { label: t('soundBlocked') }, h(SoundSelect, { kind: 'blocked', cfg, t, onChange: updateSound })),
+    h(Row, { label: t('soundAborted') }, h(SoundSelect, { kind: 'aborted', cfg, t, onChange: updateSound })),
+    h('p', { style: { margin: '8px 0 0', opacity: 0.6, fontSize: 11 } }, t('soundHint')),
     h('div', { style: { padding: '12px 0 4px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } },
-      h('button', { style: btnStyle, onClick: () => chime(cfg.volume) }, t('testSound')),
+      h('button', { style: btnStyle, onClick: () => playKindSound('completed', cfg.volume, cfg) }, t('testSound')),
       h('button', { style: btnStyle, onClick: testNotify }, t('testNotify'))),
     h('div', { style: { padding: '8px 0 0', fontWeight: 600, fontSize: 12, opacity: 0.8 } }, t('testPreview')),
     h('div', { style: { padding: '8px 0 4px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } },
@@ -792,7 +955,7 @@ exports.apply = function apply(ctx) {
 }
 
 // 单测钩子（客户端宿主会忽略该额外导出）
-exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, emitTest, onTest }
+exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, emitTest, onTest, soundIdForKind, defaultSounds, detectPlatform, soundPresetIds: Object.keys(SOUND_PRESETS) }
 
 return module.exports;
 } });
