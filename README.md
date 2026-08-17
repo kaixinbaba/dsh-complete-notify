@@ -1,6 +1,11 @@
 # dsh-complete-notify
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/dsh-complete-notify"><img src="https://img.shields.io/npm/v/dsh-complete-notify" alt="npm version"></a>
+  <a href="https://github.com/kaixinbaba/dsh-complete-notify/blob/main/LICENSE"><img src="https://img.shields.io/npm/l/dsh-complete-notify" alt="license"></a>
+</p>
+
+<p align="center">
   <img src="assets/cover.png" alt="dsh-complete-notify cover" width="720">
 </p>
 
@@ -9,13 +14,23 @@ DeepSeek Harness（DSH）任务完成通知插件：任务完成时播放**提�
 - **纯浏览器方案**：音效用 Web Audio 合成、弹窗是页面内 toast、页面在后台时改用系统通知（Web Notification API）——零系统依赖、零音频文件，Windows / macOS / Linux 通用
 - **不依赖任何系统通知命令**（无 osascript / notify-send / PowerShell），通知权限是浏览器站点级授权，授权一次即可
 - 与官方运行指示灯同源的完成检测：会话列表快照的 `running` / `completed` 状态
+- toast 与系统通知附带**运行统计**（时长 / tokens / 步骤），点击直达对应会话
 
 ## 安装
 
 ```sh
-dsh plugin --profile web add link:/path/to/dsh-complete-notify
+# 从 npm 安装（推荐）
+dsh plugin --profile web add dsh-complete-notify
+# 或锁定 GitHub 版本
+dsh plugin --profile web add "github:kaixinbaba/dsh-complete-notify"
 # 重启 dsh web 生效（launchd 托管时）：
 launchctl kickstart -k gui/$(id -u)/com.dsh.dsh-web
+```
+
+本地开发时用源码安装（`link:` 指向本地目录，改代码后重启即生效，无需每次走 npm）：
+
+```sh
+dsh plugin --profile web add link:/path/to/dsh-complete-notify
 ```
 
 ## 使用
@@ -43,15 +58,15 @@ launchctl kickstart -k gui/$(id -u)/com.dsh.dsh-web
 ## 已知限制
 
 - 标签页必须开着（浏览器限制）；标签页关闭后系统通知也收不到。如需关页推送可后续接 Push API（需推送服务器）
-- v0.1 不区分任务成功/失败，统一「任务完成」；后续可从会话快照的 `turn/end` reason 上色
+- 暂不区分任务成功/失败，统一「任务完成」；后续可从会话快照的 `turn/end` reason 上色
 - toast 为深色样式，暂未跟随明暗主题切换
 - 浏览器自动播放策略：首次用户交互（点击/按键）后音效才可用——DSH 里发第一条消息时即自然解锁
 
 ## 开发
 
 ```sh
-node --test tests/    # 完成检测状态机单测（通过 stub 执行同一份 client/client.js）
-npm run check         # 语法检查
+node --test          # 完成检测状态机 + 运行统计单测（通过 stub 执行同一份 client/client.js）
+npm run check        # 语法检查
 ```
 
 结构：
