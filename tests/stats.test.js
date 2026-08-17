@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, tZh } from './helpers.js'
+import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, emitTest, onTest, tZh } from './helpers.js'
 
 /** 构造最小会话快照。 */
 function snap({ timings, nodes }) {
@@ -117,4 +117,14 @@ test('client kindMeta：completed 兜底 + 各状态颜色', () => {
   assert.equal(kindMeta('aborted', tZh).color, '#f87171')
   assert.equal(kindMeta('unknown', tZh).label, '任务完成') // 兜底 completed
   assert.equal(kindMeta(undefined, tZh).color, '#4ade80')
+})
+
+test('状态预览事件：onTest 订阅 / emitTest 触发 / 退订', () => {
+  const seen = []
+  const off = onTest((k) => seen.push(k))
+  emitTest('blocked')
+  emitTest('aborted')
+  off()
+  emitTest('completed')
+  assert.deepEqual(seen, ['blocked', 'aborted'])
 })

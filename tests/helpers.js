@@ -44,6 +44,8 @@ export const cleanRecap = bundle.__test.cleanRecap
 export const lastAnswerText = bundle.__test.lastAnswerText
 export const inferKind = bundle.__test.inferKind
 export const kindMeta = bundle.__test.kindMeta
+export const emitTest = bundle.__test.emitTest
+export const onTest = bundle.__test.onTest
 
 /** 简体中文文案 stub（t('key') → 值）。 */
 export const tZh = (key) => ({

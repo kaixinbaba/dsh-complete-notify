@@ -50,6 +50,12 @@ const zh = {
   unitSec: '秒',
   testSound: '测试音效',
   testNotify: '测试通知',
+  testPreview: '状态预览',
+  testComplete: '测试完成',
+  testBlocked: '测试阻塞',
+  testAborted: '测试中断',
+  testToastTitle: '测试会话',
+  testToastRecap: '这是一条测试小结，用于预览不同状态的提醒效果。',
   permGranted: '系统通知权限：已授权',
   permDenied: '系统通知权限：已拒绝（在浏览器地址栏左侧的站点设置中开启）',
   permDefault: '系统通知权限：未授权 —— 点击「测试通知」完成授权',
@@ -75,6 +81,12 @@ const en = {
   unitSec: 's',
   testSound: 'Test sound',
   testNotify: 'Test notification',
+  testPreview: 'State preview',
+  testComplete: 'Test completed',
+  testBlocked: 'Test blocked',
+  testAborted: 'Test interrupted',
+  testToastTitle: 'Test session',
+  testToastRecap: 'A test recap to preview the state color.',
   permGranted: 'Notification permission: granted',
   permDenied: 'Notification permission: denied (enable it in the site settings beside the address bar)',
   permDefault: 'Notification permission: not granted — click "Test notification" to grant it',
@@ -434,6 +446,21 @@ async function fetchInfo(sessionId) {
   }
 }
 
+// ---------- 状态预览（设置页 → ToastHost 的模块级事件） ----------
+const testListeners = []
+function emitTest(kind) {
+  for (const fn of testListeners.slice()) {
+    try { fn(kind) } catch (err) {}
+  }
+}
+function onTest(fn) {
+  testListeners.push(fn)
+  return () => {
+    const i = testListeners.indexOf(fn)
+    if (i >= 0) testListeners.splice(i, 1)
+  }
+}
+
 // ---------- Toast 组件 ----------
 function ToastItem(props) {
   const { toast, index, onClose, onOpen, t } = props
@@ -513,9 +540,20 @@ function ToastHost(props) {
   const [toasts, setToasts] = useState([])
   const watcherRef = useRef(null)
   const prevRef = useRef(null)
+  const tRef = useRef(t)
+  tRef.current = t
   if (watcherRef.current === null) watcherRef.current = createWatcher()
 
   useEffect(() => () => stopTitleFlash(), [])
+
+  // 状态预览：设置页按钮 → 弹一条对应状态的测试 toast
+  useEffect(() => onTest((kind) => {
+    const cfg = getCfg()
+    if (cfg.enabled === false) return
+    if (cfg.sound) chime(cfg.volume)
+    pushTestToast(kind)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [])
 
   useEffect(() => {
     if (snap === null) return
@@ -575,6 +613,23 @@ function ToastHost(props) {
     return key
   }
 
+  /** 设置页「状态预览」：弹一条对应状态的测试 toast。 */
+  function pushTestToast(kind) {
+    const key = 'test:' + kind + ':' + Date.now()
+    setToasts((prev) => {
+      const tail = prev.slice(-(MAX_TOASTS - 1))
+      return tail.concat([{
+        key,
+        sessionId: null,
+        title: tRef.current('testToastTitle'),
+        statsLine: '⏱ 12s · ⚡ 1.2k tokens · 🔧 3 steps',
+        recap: tRef.current('testToastRecap'),
+        kind,
+        duration: TOAST_MS,
+      }])
+    })
+  }
+
   /** 拉取 Host 的小结 + 结果状态升级 toast（0/1.5/3.5s 各试一次）。 */
   function refreshInfo(key, sessionId) {
     const apply = (info) => {
@@ -595,7 +650,7 @@ function ToastHost(props) {
     setToasts((prev) => prev.filter((item) => item.key !== key))
   }
   function openSession(id) {
-    if (sessions === undefined) return
+    if (sessions === undefined || !id) return
     try { sessions.open(id) } catch (err) {}
   }
 
@@ -668,6 +723,11 @@ function SettingsPage(props) {
     h('div', { style: { padding: '12px 0 4px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } },
       h('button', { style: btnStyle, onClick: () => chime(cfg.volume) }, t('testSound')),
       h('button', { style: btnStyle, onClick: testNotify }, t('testNotify'))),
+    h('div', { style: { padding: '8px 0 0', fontWeight: 600, fontSize: 12, opacity: 0.8 } }, t('testPreview')),
+    h('div', { style: { padding: '8px 0 4px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } },
+      h('button', { style: Object.assign({}, btnStyle, { color: '#4ade80' }), onClick: () => emitTest('completed') }, t('testComplete')),
+      h('button', { style: Object.assign({}, btnStyle, { color: '#facc15' }), onClick: () => emitTest('blocked') }, t('testBlocked')),
+      h('button', { style: Object.assign({}, btnStyle, { color: '#f87171' }), onClick: () => emitTest('aborted') }, t('testAborted'))),
     h('p', { style: { margin: '10px 0 0', opacity: 0.7 } }, permText()),
   )
 }
@@ -713,7 +773,7 @@ exports.apply = function apply(ctx) {
 }
 
 // 单测钩子（客户端宿主会忽略该额外导出）
-exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta }
+exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, emitTest, onTest }
 
 return module.exports;
 } });
