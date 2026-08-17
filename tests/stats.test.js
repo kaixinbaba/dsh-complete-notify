@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizeRun, formatDuration, formatTokens, buildStatsLine, tZh } from './helpers.js'
+import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, tZh } from './helpers.js'
 
 /** 构造最小会话快照。 */
 function snap({ timings, nodes }) {
@@ -76,4 +76,26 @@ test('buildStatsLine：按可用字段拼接', () => {
   assert.equal(line, '⏱ 2分 5秒 · ⚡ 1.2k tokens · 🔧 3 steps')
   assert.equal(buildStatsLine({ tokens: 0, steps: 0, durationMs: null }, tZh), '')
   assert.equal(buildStatsLine(null, tZh), '')
+})
+
+test('client cleanRecap：清洗 + 50 字截断', () => {
+  assert.equal(cleanRecap('**完成** 了登录修复。'), '完成 了登录修复。')
+  assert.equal(cleanRecap('见 [链接](https://x)'), '见 链接')
+  assert.equal(cleanRecap(''), '')
+  const out = cleanRecap('好'.repeat(80))
+  assert.equal(out.length, 51)
+  assert.ok(out.endsWith('…'))
+})
+
+test('client lastAnswerText：取快照最后一条 assistant 消息文本', () => {
+  const snapshot = {
+    nodes: [
+      { kind: 'assistant', turn: 1, blocks: [{ kind: 'text', text: '第一轮' }] },
+      { kind: 'tool-call', turn: 1, callId: 'c', name: 'bash' },
+      { kind: 'assistant', turn: 1, blocks: [{ kind: 'tool-call', callId: 'c2', name: 'read' }, { kind: 'text', text: '最终回答' }] },
+    ],
+  }
+  assert.equal(lastAnswerText(snapshot), '最终回答')
+  assert.equal(lastAnswerText({ nodes: [] }), '')
+  assert.equal(lastAnswerText(null), '')
 })

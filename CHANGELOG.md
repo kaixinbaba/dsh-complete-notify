@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — 2026-08-17
+
+- 新特性：toast 与系统通知附带**一句话小结（💬 recap）**——弹窗先显示降级小结（最终回答前 50 字清洗版），Host 端异步调用 LLM 生成真正的 ≤50 字小结并自动升级替换；小结覆盖整轮运行
+- Host 半从空壳变为真实实现：监听 `agent/status` idle 触发 recap 生成（每次运行一次 LLM 调用），经 webserver 路由 `GET /dsh-complete-notify/recap` 供客户端拉取
+- 新增 Host 与客户端小结/回答提取单测（共 24 个用例全绿）
+- 文档：说明 recap 的降级/升级机制与「最后一轮统计 vs 整轮小结」的口径差异
+
 ## 0.2.0 — 2026-08-16
 
 - 新特性：toast 与系统通知附带**运行统计**——时长（⏱，`turnTimings` 最后一轮）、tokens（⚡，assistant 消息 `usage` 输入+输出之和）、步骤数（🔧，工具调用块计数）

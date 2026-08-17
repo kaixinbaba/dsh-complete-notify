@@ -332,12 +332,52 @@ function buildStatsLine(stats, t) {
   return parts.join(' · ')
 }
 
-function runStatsFor(sessions, sessionId) {
+function lastAnswerText(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.nodes)) return ''
+  const nodes = snapshot.nodes
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i]
+    if (n && n.kind === 'assistant' && Array.isArray(n.blocks)) {
+      const texts = []
+      for (const b of n.blocks) if (b && b.kind === 'text' && typeof b.text === 'string') texts.push(b.text)
+      if (texts.length > 0) return texts.join(' ')
+    }
+  }
+  return ''
+}
+
+function cleanRecap(text, max) {
+  if (typeof text !== 'string' || text.trim() === '') return ''
+  let s = text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // 链接 → 链接文字
+    .replace(/[#>*`~_|]/g, ' ')              // markdown 噪音
+    .replace(/\s+/g, ' ')
+    .trim()
+  const limit = typeof max === 'number' && max > 0 ? max : 50
+  if (s.length <= limit) return s
+  return s.slice(0, limit) + '…'
+}
+
+/** 一次快照读取同时取运行统计与最后回答文本（供降级小结）。 */
+function collectRunInfo(sessions, sessionId) {
   if (sessions === undefined || typeof sessions.binding !== 'function') return null
   try {
     const binding = sessions.binding(sessionId)
     if (!binding || !binding.session || typeof binding.session.getSnapshot !== 'function') return null
-    return summarizeRun(binding.session.getSnapshot())
+    const snapshot = binding.session.getSnapshot()
+    return { stats: summarizeRun(snapshot), answer: lastAnswerText(snapshot) }
+  } catch (err) {
+    return null
+  }
+}
+
+/** 从 Host 拉取 LLM 生成的小结（webserver 路由），失败返回 null。 */
+async function fetchRecap(sessionId) {
+  try {
+    const res = await fetch('/dsh-complete-notify/recap?sessionId=' + encodeURIComponent(sessionId), { cache: 'no-store' })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data && typeof data.recap === 'string' && data.recap !== '' ? data.recap : null
   } catch (err) {
     return null
   }
@@ -360,7 +400,7 @@ function ToastItem(props) {
 
   const style = {
     position: 'fixed',
-    top: 16 + index * 82,
+    top: 16 + index * 116,
     right: 16,
     width: 300,
     boxSizing: 'border-box',
@@ -398,6 +438,9 @@ function ToastItem(props) {
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       },
     }, toast.title),
+    toast.recap
+      ? h('div', { style: { marginTop: 4, color: 'rgba(242,244,248,0.85)', fontSize: 12, lineHeight: 1.4 } }, '💬 ' + toast.recap)
+      : null,
     toast.statsLine
       ? h('div', { style: { marginTop: 4, color: '#7dd3a8', fontSize: 12, whiteSpace: 'nowrap' } }, toast.statsLine)
       : null,
@@ -431,33 +474,52 @@ function ToastHost(props) {
     const visible = document.visibilityState === 'visible'
     for (const ev of events) {
       if (cfg.sound) chime(cfg.volume)
-      const stats = runStatsFor(sessions, ev.sessionId)
-      const statsLine = buildStatsLine(stats, t)
+      const info = collectRunInfo(sessions, ev.sessionId)
+      const statsLine = buildStatsLine(info ? info.stats : null, t)
+      const fallbackRecap = cleanRecap(info ? info.answer : '')
       if (visible) {
-        pushToast(ev, statsLine, TOAST_MS)
+        const key = pushToast(ev, statsLine, fallbackRecap, TOAST_MS)
+        refreshRecap(key, ev.sessionId)
       } else if (cfg.systemNotify) {
         const shown = showSystemNotification({
           title: t('doneTitle'),
-          body: ev.title + (statsLine ? '\n' + statsLine : ''),
+          body: ev.title + (fallbackRecap ? '\n💬 ' + fallbackRecap : '') + (statsLine ? '\n' + statsLine : ''),
           tag: ev.sessionId,
           silent: Boolean(cfg.sound), // 音效由我们播放，避免系统通知双重出声
           onClick: () => openSession(ev.sessionId),
         })
         if (shown) flashTitle('⚠ ' + t('doneTitle'))
-        else pushToast(ev, statsLine, TOAST_MS_BG) // 系统通知不可达 → 长时 toast 兜底
+        else {
+          const key = pushToast(ev, statsLine, fallbackRecap, TOAST_MS_BG) // 系统通知不可达 → 长时 toast 兜底
+          refreshRecap(key, ev.sessionId)
+        }
       } else {
         flashTitle('⚠ ' + t('doneTitle'))
-        pushToast(ev, statsLine, TOAST_MS_BG)
+        const key = pushToast(ev, statsLine, fallbackRecap, TOAST_MS_BG)
+        refreshRecap(key, ev.sessionId)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap])
 
-  function pushToast(ev, statsLine, duration) {
+  function pushToast(ev, statsLine, fallbackRecap, duration) {
+    const key = ev.sessionId + ':' + Date.now()
     setToasts((prev) => {
       const tail = prev.slice(-(MAX_TOASTS - 1)) // 保留 N-1 条 + 新 1 条 = 最多 MAX_TOASTS 条
-      return tail.concat([{ key: ev.sessionId + ':' + Date.now(), sessionId: ev.sessionId, title: ev.title, statsLine, duration }])
+      return tail.concat([{ key, sessionId: ev.sessionId, title: ev.title, statsLine, recap: fallbackRecap || '', duration }])
     })
+    return key
+  }
+
+  /** 拉取 LLM 小结升级 toast（就绪前保持降级小结；0/1.5/3.5s 各试一次）。 */
+  function refreshRecap(key, sessionId) {
+    const apply = (recap) => {
+      if (!recap) return
+      setToasts((prev) => prev.map((item) => (item.key === key ? Object.assign({}, item, { recap }) : item)))
+    }
+    fetchRecap(sessionId).then(apply)
+    setTimeout(() => fetchRecap(sessionId).then(apply), 1500)
+    setTimeout(() => fetchRecap(sessionId).then(apply), 3500)
   }
   function closeToast(key) {
     setToasts((prev) => prev.filter((item) => item.key !== key))
@@ -581,7 +643,7 @@ exports.apply = function apply(ctx) {
 }
 
 // 单测钩子（客户端宿主会忽略该额外导出）
-exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine }
+exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText }
 
 return module.exports;
 } });
