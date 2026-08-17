@@ -97,3 +97,41 @@ test('同一快照重复 diff 不重复触发（StrictMode 双调用安全）', 
   assert.equal(w.diff(prev, idle).length, 1)
   assert.equal(w.diff(idle, idle).length, 0)
 })
+
+test('pendingInteraction 出现 → kind:blocked 事件，粘性不重复，清除后再次触发', () => {
+  const w = createWatcher()
+  const idle = snapOf([{ id: 'a' }], 'a')
+  w.diff(null, idle)
+  const pending = snapOf([{ id: 'a', pending: true }], 'a')
+  const events = w.diff(idle, pending)
+  assert.equal(events.length, 1)
+  assert.equal(events[0].sessionId, 'a')
+  assert.equal(events[0].kind, 'blocked')
+  // 粘性：pending 保持期间不重复
+  assert.equal(w.diff(pending, snapOf([{ id: 'a', pending: true }], 'a')).length, 0)
+  // 清除后可再次触发
+  w.diff(pending, idle)
+  const again = w.diff(idle, snapOf([{ id: 'a', pending: true }], 'a'))
+  assert.equal(again.length, 1)
+  assert.equal(again[0].kind, 'blocked')
+})
+
+test('首次快照已有 pendingInteraction 不补发（历史阻塞）', () => {
+  const w = createWatcher()
+  const events = w.diff(null, snapOf([{ id: 'a', pending: true }], 'a'))
+  assert.equal(events.length, 0)
+  // 之后清除再出现才触发
+  const idle = snapOf([{ id: 'a' }], 'a')
+  w.diff(snapOf([{ id: 'a', pending: true }], 'a'), idle)
+  const events2 = w.diff(idle, snapOf([{ id: 'a', pending: true }], 'a'))
+  assert.equal(events2.length, 1)
+})
+
+test('子代理的 pendingInteraction 被过滤', () => {
+  const w = createWatcher()
+  const idle = snapOf([{ id: 'root' }, { id: 'sub', origin: 'subagent' }], 'root')
+  w.diff(null, idle)
+  const events = w.diff(idle, snapOf([{ id: 'root', pending: true }, { id: 'sub', pending: true, origin: 'subagent' }], 'root'))
+  assert.equal(events.length, 1)
+  assert.equal(events[0].sessionId, 'root')
+})

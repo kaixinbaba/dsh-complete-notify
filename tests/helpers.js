@@ -69,6 +69,7 @@ export function snapOf(entries, current) {
       displayTitle: e.title || e.id,
       running: e.running === true,
       ...(e.completed === true ? { completed: true } : {}),
+      ...(e.pending === true ? { pendingInteraction: { kind: 'question' } } : {}),
       ...(e.origin ? { origin: e.origin } : {}),
     }
   }

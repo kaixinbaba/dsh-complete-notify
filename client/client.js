@@ -118,11 +118,14 @@ function setCfg(patch) {
 //  1. 会话 running: true → false 边缘 = 完成（当前选中会话的完成只有这条信号）；
 //  2. `completed` 粘性标记出现 = 「未选中时完成」的兜底信号（运行时保证只在
 //     非选中会话上置位、选中后清除）；
-//  3. 首次快照（prev == null）只初始化、不触发（不补发历史完成）；
-//  4. notified 集合按 sessionId 去重；会话重新 running 时重置，允许下次再提醒；
-//  5. origin === 'subagent' 的子代理会话过滤。
+//  3. `pendingInteraction` 出现（提问/审批挂起）= 阻塞，发出 kind: 'blocked'
+//     事件（agent 可能仍在运行等待，不能只靠 running 边缘）；
+//  4. 首次快照（prev == null）只初始化、不触发（不补发历史完成/历史阻塞）；
+//  5. notified / pending 集合按 sessionId 去重；会话重新 running 时重置，
+//     允许下次再提醒；阻塞清除后可再次触发；
+//  6. origin === 'subagent' 的子代理会话过滤。
 function createWatcher() {
-  const state = new Map() // sessionId -> { wasRunning, notified }
+  const state = new Map() // sessionId -> { wasRunning, notified, pending }
   return {
     diff(prev, next) {
       const events = []
@@ -137,7 +140,7 @@ function createWatcher() {
         if (entry === undefined) continue
         if (entry.origin === 'subagent') continue
         let st = state.get(id)
-        if (st === undefined) st = { wasRunning: false, notified: false }
+        if (st === undefined) st = { wasRunning: false, notified: false, pending: false }
         if (entry.running === true) {
           // 重新开跑 = 新的完成周期
           st.wasRunning = true
@@ -157,6 +160,21 @@ function createWatcher() {
               selected: id === current,
             })
           }
+        }
+        // 阻塞边缘：pendingInteraction 出现 → 等待反馈（提问/审批挂起）
+        const pending = entry.pendingInteraction !== undefined && entry.pendingInteraction !== null
+        if (prev === null || prev === undefined) {
+          st.pending = pending // 首次快照只记录，不补发历史阻塞
+        } else if (pending && !st.pending) {
+          st.pending = true
+          events.push({
+            sessionId: id,
+            title: entry.displayTitle || id,
+            selected: id === current,
+            kind: 'blocked',
+          })
+        } else if (!pending && st.pending) {
+          st.pending = false
         }
         state.set(id, st)
       }
@@ -571,7 +589,8 @@ function ToastHost(props) {
         const info = collectRunInfo(sessions, ev.sessionId)
         const statsLine = buildStatsLine(info ? info.stats : null, t)
         const fallbackRecap = cleanRecap(info ? info.answer : '')
-        const provisionalKind = (info && info.kind) || 'completed'
+        const eventKind = ev.kind || null // 阻塞事件自带 'blocked'
+        const provisionalKind = eventKind || (info && info.kind) || 'completed'
         if (visible) {
           const key = pushToast(ev, statsLine, fallbackRecap, provisionalKind, TOAST_MS)
           refreshInfo(key, ev.sessionId)
@@ -579,7 +598,7 @@ function ToastHost(props) {
           // 系统通知发送后不可更新，先拉一次状态（本地路由，毫秒级）再发
           const info2 = await fetchInfo(ev.sessionId)
           if (cancelled) return
-          const kind = (info2 && info2.kind) || provisionalKind
+          const kind = eventKind || (info2 && info2.kind) || provisionalKind
           const meta = kindMeta(kind, t)
           const shown = showSystemNotification({
             title: meta.label,
