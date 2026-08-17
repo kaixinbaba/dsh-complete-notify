@@ -42,9 +42,19 @@ export const formatTokens = bundle.__test.formatTokens
 export const buildStatsLine = bundle.__test.buildStatsLine
 export const cleanRecap = bundle.__test.cleanRecap
 export const lastAnswerText = bundle.__test.lastAnswerText
+export const inferKind = bundle.__test.inferKind
+export const kindMeta = bundle.__test.kindMeta
 
 /** 简体中文文案 stub（t('key') → 值）。 */
-export const tZh = (key) => ({ unitMin: '分', unitSec: '秒' })[key] ?? key
+export const tZh = (key) => ({
+  unitMin: '分',
+  unitSec: '秒',
+  doneTitle: '任务完成',
+  blockedTitle: '等待你的反馈',
+  abortedTitle: '任务已中断',
+  errorTitle: '任务失败',
+  maxTokensTitle: '达到 token 上限',
+})[key] ?? key
 
 /** 构造会话列表快照（SessionListState 的最小形态）。 */
 export function snapOf(entries, current) {

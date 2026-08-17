@@ -34,6 +34,10 @@ const zh = {
   navLabel: '任务完成通知',
   overlayLabel: '任务完成通知',
   doneTitle: '任务完成',
+  blockedTitle: '等待你的反馈',
+  abortedTitle: '任务已中断',
+  errorTitle: '任务失败',
+  maxTokensTitle: '达到 token 上限',
   close: '关闭',
   clickHint: '点击打开会话',
   testBody: '这是一条测试通知',
@@ -55,6 +59,10 @@ const en = {
   navLabel: 'Completion Notify',
   overlayLabel: 'Completion Notify',
   doneTitle: 'Task completed',
+  blockedTitle: 'Waiting for your input',
+  abortedTitle: 'Task interrupted',
+  errorTitle: 'Task failed',
+  maxTokensTitle: 'Token limit reached',
   close: 'Close',
   clickHint: 'Click to open session',
   testBody: 'This is a test notification',
@@ -358,26 +366,69 @@ function cleanRecap(text, max) {
   return s.slice(0, limit) + '…'
 }
 
-/** 一次快照读取同时取运行统计与最后回答文本（供降级小结）。 */
+/** 一次快照读取同时取运行统计、最后回答文本与推断结果状态。 */
 function collectRunInfo(sessions, sessionId) {
   if (sessions === undefined || typeof sessions.binding !== 'function') return null
   try {
     const binding = sessions.binding(sessionId)
     if (!binding || !binding.session || typeof binding.session.getSnapshot !== 'function') return null
     const snapshot = binding.session.getSnapshot()
-    return { stats: summarizeRun(snapshot), answer: lastAnswerText(snapshot) }
+    return { stats: summarizeRun(snapshot), answer: lastAnswerText(snapshot), kind: inferKind(snapshot) }
   } catch (err) {
     return null
   }
 }
 
-/** 从 Host 拉取 LLM 生成的小结（webserver 路由），失败返回 null。 */
-async function fetchRecap(sessionId) {
+/** 结果状态元数据：颜色/图标/文案 key（fallback 一律 completed）。 */
+const KIND_META = {
+  completed: { key: 'doneTitle', color: '#4ade80', icon: '✓' },
+  blocked: { key: 'blockedTitle', color: '#facc15', icon: '⚠' },
+  aborted: { key: 'abortedTitle', color: '#f87171', icon: '✕' },
+  error: { key: 'errorTitle', color: '#f87171', icon: '✕' },
+  'max-tokens': { key: 'maxTokensTitle', color: '#fb923c', icon: '⚠' },
+}
+function kindMeta(kind, t) {
+  const m = KIND_META[kind] || KIND_META.completed
+  return { label: t(m.key), color: m.color, icon: m.icon }
+}
+
+/**
+ * 客户端推断结果状态（Host 不可达时的兜底）：最后一轮出现 turn-error /
+ * turn-max-tokens 节点或被打断的 assistant 消息。
+ */
+function inferKind(snapshot) {
+  if (!snapshot || !Array.isArray(snapshot.nodes)) return 'unknown'
+  let lastTurn = -1
+  for (const n of snapshot.nodes) {
+    if (n && typeof n.turn === 'number' && n.turn > lastTurn) lastTurn = n.turn
+  }
+  if (lastTurn < 0) return 'unknown'
+  let hasError = false
+  let hasMaxTokens = false
+  let interrupted = false
+  for (const n of snapshot.nodes) {
+    if (!n || n.turn !== lastTurn) continue
+    if (n.kind === 'turn-error') hasError = true
+    if (n.kind === 'turn-max-tokens') hasMaxTokens = true
+    if (n.kind === 'assistant' && n.interrupted === true) interrupted = true
+  }
+  if (hasError) return 'error'
+  if (hasMaxTokens) return 'max-tokens'
+  if (interrupted) return 'aborted'
+  return 'unknown'
+}
+
+/** 从 Host 拉取小结 + 结果状态（webserver 路由），失败返回 null。 */
+async function fetchInfo(sessionId) {
   try {
     const res = await fetch('/dsh-complete-notify/recap?sessionId=' + encodeURIComponent(sessionId), { cache: 'no-store' })
     if (!res.ok) return null
     const data = await res.json()
-    return data && typeof data.recap === 'string' && data.recap !== '' ? data.recap : null
+    if (!data) return null
+    return {
+      kind: typeof data.kind === 'string' && data.kind !== '' ? data.kind : null,
+      recap: typeof data.recap === 'string' && data.recap !== '' ? data.recap : '',
+    }
   } catch (err) {
     return null
   }
@@ -386,6 +437,7 @@ async function fetchRecap(sessionId) {
 // ---------- Toast 组件 ----------
 function ToastItem(props) {
   const { toast, index, onClose, onOpen, t } = props
+  const meta = kindMeta(toast.kind, t)
   const [phase, setPhase] = useState('enter') // enter -> shown -> leave
   useEffect(() => {
     const t1 = setTimeout(() => setPhase('shown'), 30)
@@ -406,6 +458,7 @@ function ToastItem(props) {
     boxSizing: 'border-box',
     padding: '10px 12px',
     borderRadius: 10,
+    borderLeft: '3px solid ' + meta.color,
     background: 'rgba(24, 27, 34, 0.97)',
     color: '#f2f4f8',
     boxShadow: '0 10px 28px rgba(0, 0, 0, 0.4)',
@@ -421,8 +474,8 @@ function ToastItem(props) {
   }
   return h('div', { style, role: 'status', onClick: () => onOpen(toast) },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
-      h('span', { style: { color: '#4ade80', fontWeight: 700 } }, '✓'),
-      h('span', { style: { fontWeight: 600, flex: 1 } }, t('doneTitle')),
+      h('span', { style: { color: meta.color, fontWeight: 700 } }, meta.icon),
+      h('span', { style: { color: meta.color, fontWeight: 600, flex: 1 } }, meta.label),
       h('button', {
         title: t('close'),
         'aria-label': t('close'),
@@ -472,54 +525,71 @@ function ToastHost(props) {
     const cfg = getCfg()
     if (cfg.enabled === false) return
     const visible = document.visibilityState === 'visible'
-    for (const ev of events) {
-      if (cfg.sound) chime(cfg.volume)
-      const info = collectRunInfo(sessions, ev.sessionId)
-      const statsLine = buildStatsLine(info ? info.stats : null, t)
-      const fallbackRecap = cleanRecap(info ? info.answer : '')
-      if (visible) {
-        const key = pushToast(ev, statsLine, fallbackRecap, TOAST_MS)
-        refreshRecap(key, ev.sessionId)
-      } else if (cfg.systemNotify) {
-        const shown = showSystemNotification({
-          title: t('doneTitle'),
-          body: ev.title + (fallbackRecap ? '\n💬 ' + fallbackRecap : '') + (statsLine ? '\n' + statsLine : ''),
-          tag: ev.sessionId,
-          silent: Boolean(cfg.sound), // 音效由我们播放，避免系统通知双重出声
-          onClick: () => openSession(ev.sessionId),
-        })
-        if (shown) flashTitle('⚠ ' + t('doneTitle'))
-        else {
-          const key = pushToast(ev, statsLine, fallbackRecap, TOAST_MS_BG) // 系统通知不可达 → 长时 toast 兜底
-          refreshRecap(key, ev.sessionId)
+    let cancelled = false
+    ;(async () => {
+      for (const ev of events) {
+        if (cancelled) return
+        if (cfg.sound) chime(cfg.volume)
+        const info = collectRunInfo(sessions, ev.sessionId)
+        const statsLine = buildStatsLine(info ? info.stats : null, t)
+        const fallbackRecap = cleanRecap(info ? info.answer : '')
+        const provisionalKind = (info && info.kind) || 'completed'
+        if (visible) {
+          const key = pushToast(ev, statsLine, fallbackRecap, provisionalKind, TOAST_MS)
+          refreshInfo(key, ev.sessionId)
+        } else if (cfg.systemNotify) {
+          // 系统通知发送后不可更新，先拉一次状态（本地路由，毫秒级）再发
+          const info2 = await fetchInfo(ev.sessionId)
+          if (cancelled) return
+          const kind = (info2 && info2.kind) || provisionalKind
+          const meta = kindMeta(kind, t)
+          const shown = showSystemNotification({
+            title: meta.label,
+            body: ev.title + (fallbackRecap ? '\n💬 ' + fallbackRecap : '') + (statsLine ? '\n' + statsLine : ''),
+            tag: ev.sessionId,
+            silent: Boolean(cfg.sound), // 音效由我们播放，避免系统通知双重出声
+            onClick: () => openSession(ev.sessionId),
+          })
+          if (shown) flashTitle('⚠ ' + meta.label)
+          else {
+            const key = pushToast(ev, statsLine, fallbackRecap, kind, TOAST_MS_BG) // 系统通知不可达 → 长时 toast 兜底
+            refreshInfo(key, ev.sessionId)
+          }
+        } else {
+          flashTitle('⚠ ' + kindMeta(provisionalKind, t).label)
+          const key = pushToast(ev, statsLine, fallbackRecap, provisionalKind, TOAST_MS_BG)
+          refreshInfo(key, ev.sessionId)
         }
-      } else {
-        flashTitle('⚠ ' + t('doneTitle'))
-        const key = pushToast(ev, statsLine, fallbackRecap, TOAST_MS_BG)
-        refreshRecap(key, ev.sessionId)
       }
-    }
+    })()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap])
 
-  function pushToast(ev, statsLine, fallbackRecap, duration) {
+  function pushToast(ev, statsLine, fallbackRecap, kind, duration) {
     const key = ev.sessionId + ':' + Date.now()
     setToasts((prev) => {
       const tail = prev.slice(-(MAX_TOASTS - 1)) // 保留 N-1 条 + 新 1 条 = 最多 MAX_TOASTS 条
-      return tail.concat([{ key, sessionId: ev.sessionId, title: ev.title, statsLine, recap: fallbackRecap || '', duration }])
+      return tail.concat([{ key, sessionId: ev.sessionId, title: ev.title, statsLine, recap: fallbackRecap || '', kind: kind || 'completed', duration }])
     })
     return key
   }
 
-  /** 拉取 LLM 小结升级 toast（就绪前保持降级小结；0/1.5/3.5s 各试一次）。 */
-  function refreshRecap(key, sessionId) {
-    const apply = (recap) => {
-      if (!recap) return
-      setToasts((prev) => prev.map((item) => (item.key === key ? Object.assign({}, item, { recap }) : item)))
+  /** 拉取 Host 的小结 + 结果状态升级 toast（0/1.5/3.5s 各试一次）。 */
+  function refreshInfo(key, sessionId) {
+    const apply = (info) => {
+      if (!info) return
+      setToasts((prev) => prev.map((item) => {
+        if (item.key !== key) return item
+        const patch = {}
+        if (info.recap) patch.recap = info.recap
+        if (info.kind) patch.kind = info.kind
+        return Object.assign({}, item, patch)
+      }))
     }
-    fetchRecap(sessionId).then(apply)
-    setTimeout(() => fetchRecap(sessionId).then(apply), 1500)
-    setTimeout(() => fetchRecap(sessionId).then(apply), 3500)
+    fetchInfo(sessionId).then(apply)
+    setTimeout(() => fetchInfo(sessionId).then(apply), 1500)
+    setTimeout(() => fetchInfo(sessionId).then(apply), 3500)
   }
   function closeToast(key) {
     setToasts((prev) => prev.filter((item) => item.key !== key))
@@ -643,7 +713,7 @@ exports.apply = function apply(ctx) {
 }
 
 // 单测钩子（客户端宿主会忽略该额外导出）
-exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText }
+exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta }
 
 return module.exports;
 } });

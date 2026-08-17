@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { __test } from '../lib/index.js'
 
-const { cleanRecap, lastAnswerText } = __test
+const { cleanRecap, lastAnswerText, kindOfEvent } = __test
 
 test('host cleanRecap：去 markdown 噪音 + 折叠空白', () => {
   assert.equal(cleanRecap('  **修复** 了 `登录` bug  '), '修复 了 登录 bug')
@@ -51,4 +51,15 @@ test('host lastAnswerText：无 assistant 文本返回空串', () => {
   assert.equal(lastAnswerText({ events: [] }), '')
   assert.equal(lastAnswerText(null), '')
   assert.equal(lastAnswerText({ events: [{ type: 'user/message', data: {} }] }), '')
+})
+
+test('host kindOfEvent：提取 turn/end 结果状态', () => {
+  assert.equal(kindOfEvent({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }), 'completed')
+  assert.equal(kindOfEvent({ type: 'turn/end', data: { turn: 1, reason: { kind: 'blocked' } } }), 'blocked')
+  assert.equal(kindOfEvent({ type: 'turn/end', data: { turn: 1, reason: { kind: 'aborted' } } }), 'aborted')
+  assert.equal(kindOfEvent({ type: 'turn/end', data: { turn: 1, reason: { kind: 'error' } } }), 'error')
+  assert.equal(kindOfEvent({ type: 'turn/end', data: { turn: 1, reason: { kind: 'max-tokens' } } }), 'max-tokens')
+  assert.equal(kindOfEvent({ type: 'turn/end', data: { turn: 1, reason: {} } }), 'unknown')
+  assert.equal(kindOfEvent({ type: 'assistant/message', data: {} }), null)
+  assert.equal(kindOfEvent(null), null)
 })

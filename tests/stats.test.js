@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, tZh } from './helpers.js'
+import { summarizeRun, formatDuration, formatTokens, buildStatsLine, cleanRecap, lastAnswerText, inferKind, kindMeta, tZh } from './helpers.js'
 
 /** 构造最小会话快照。 */
 function snap({ timings, nodes }) {
@@ -98,4 +98,23 @@ test('client lastAnswerText：取快照最后一条 assistant 消息文本', () 
   assert.equal(lastAnswerText(snapshot), '最终回答')
   assert.equal(lastAnswerText({ nodes: [] }), '')
   assert.equal(lastAnswerText(null), '')
+})
+
+test('client inferKind：按最后一轮节点推断状态', () => {
+  const node = (kind, extra = {}) => Object.assign({ kind, turn: 1, seq: 1, time: 0 }, extra)
+  assert.equal(inferKind({ nodes: [node('turn-error', { message: 'x' })] }), 'error')
+  assert.equal(inferKind({ nodes: [node('turn-max-tokens')] }), 'max-tokens')
+  assert.equal(inferKind({ nodes: [node('assistant', { blocks: [], interrupted: true })] }), 'aborted')
+  assert.equal(inferKind({ nodes: [node('assistant', { blocks: [] })] }), 'unknown')
+  assert.equal(inferKind({ nodes: [] }), 'unknown')
+  assert.equal(inferKind(null), 'unknown')
+})
+
+test('client kindMeta：completed 兜底 + 各状态颜色', () => {
+  assert.equal(kindMeta('completed', tZh).label, '任务完成')
+  assert.equal(kindMeta('blocked', tZh).label, '等待你的反馈')
+  assert.equal(kindMeta('blocked', tZh).color, '#facc15')
+  assert.equal(kindMeta('aborted', tZh).color, '#f87171')
+  assert.equal(kindMeta('unknown', tZh).label, '任务完成') // 兜底 completed
+  assert.equal(kindMeta(undefined, tZh).color, '#4ade80')
 })
