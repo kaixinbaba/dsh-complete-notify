@@ -36,6 +36,13 @@ const requireStub = (spec) => {
 const bundle = handoff.factory(requireStub)
 
 export const createWatcher = bundle.__test.createWatcher
+export const summarizeRun = bundle.__test.summarizeRun
+export const formatDuration = bundle.__test.formatDuration
+export const formatTokens = bundle.__test.formatTokens
+export const buildStatsLine = bundle.__test.buildStatsLine
+
+/** 简体中文文案 stub（t('key') → 值）。 */
+export const tZh = (key) => ({ unitMin: '分', unitSec: '秒' })[key] ?? key
 
 /** 构造会话列表快照（SessionListState 的最小形态）。 */
 export function snapOf(entries, current) {

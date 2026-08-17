@@ -35,12 +35,15 @@ const zh = {
   overlayLabel: '任务完成通知',
   doneTitle: '任务完成',
   close: '关闭',
+  clickHint: '点击打开会话',
   testBody: '这是一条测试通知',
   intro: '任务完成时播放提示音并弹出小通知；页面在后台时改用系统通知。设置保存在当前浏览器。',
   enableLabel: '启用提醒',
   soundLabel: '提示音',
   systemLabel: '系统通知（页面在后台时）',
   volumeLabel: '音量',
+  unitMin: '分',
+  unitSec: '秒',
   testSound: '测试音效',
   testNotify: '测试通知',
   permGranted: '系统通知权限：已授权',
@@ -53,12 +56,15 @@ const en = {
   overlayLabel: 'Completion Notify',
   doneTitle: 'Task completed',
   close: 'Close',
+  clickHint: 'Click to open session',
   testBody: 'This is a test notification',
   intro: 'Play a sound and show a small popup when a task completes (a system notification while the page is in the background). Settings persist in this browser.',
   enableLabel: 'Enable alerts',
   soundLabel: 'Sound',
   systemLabel: 'System notification (page in background)',
   volumeLabel: 'Volume',
+  unitMin: 'm',
+  unitSec: 's',
   testSound: 'Test sound',
   testNotify: 'Test notification',
   permGranted: 'Notification permission: granted',
@@ -253,6 +259,90 @@ function stopTitleFlash() {
   }
 }
 
+// ---------- 运行统计（从会话快照提取时长 / token / steps，纯逻辑可单测） ----------
+//
+// 数据来源（ConversationSnapshot）：
+//   - turnTimings: Map<turn, { startTime, endTime? }> → 最后一轮时长
+//   - nodes: 会话节点，assistant 节点带 blocks（含 tool-call）与 usage
+//   - usage 结构：{ inputTokens, outputTokens, cacheReadTokens?, ... }
+// 统计口径：取「最后一轮」（turn 号最大的已结束轮次）——单轮任务即为本次运行。
+function summarizeRun(snapshot) {
+  if (snapshot === null || snapshot === undefined) return null
+  const timings = snapshot.turnTimings
+  const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : []
+
+  let lastTurn = -1
+  let lastTiming = null
+  if (timings && typeof timings.forEach === 'function') {
+    timings.forEach((tm, turn) => {
+      if (typeof turn === 'number' && tm && typeof tm.endTime === 'number' && turn > lastTurn) {
+        lastTurn = turn
+        lastTiming = tm
+      }
+    })
+  }
+  if (lastTurn < 0) {
+    for (const n of nodes) {
+      if (n && typeof n.turn === 'number' && n.turn > lastTurn) lastTurn = n.turn
+    }
+  }
+  if (lastTurn < 0) return null
+
+  let tokens = 0
+  let steps = 0
+  for (const n of nodes) {
+    if (!n || n.turn !== lastTurn) continue
+    if (n.kind === 'assistant' && Array.isArray(n.blocks)) {
+      for (const b of n.blocks) {
+        if (b && b.kind === 'tool-call') steps += 1
+      }
+      if (n.usage && typeof n.usage === 'object') {
+        const u = n.usage
+        tokens += typeof u.inputTokens === 'number' ? u.inputTokens : 0
+        tokens += typeof u.outputTokens === 'number' ? u.outputTokens : 0
+      }
+    }
+  }
+  const durationMs = lastTiming ? lastTiming.endTime - lastTiming.startTime : null
+  return { durationMs, tokens, steps }
+}
+
+function formatDuration(ms, t) {
+  if (ms === null || ms === undefined || !isFinite(ms) || ms < 0) return null
+  const total = Math.round(ms / 1000)
+  if (total < 60) return total + t('unitSec')
+  const m = Math.floor(total / 60)
+  const r = total % 60
+  return r === 0 ? m + t('unitMin') : m + t('unitMin') + ' ' + r + t('unitSec')
+}
+
+function formatTokens(n) {
+  if (n === null || n === undefined || !isFinite(n)) return null
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return String(n)
+}
+
+function buildStatsLine(stats, t) {
+  if (!stats) return ''
+  const parts = []
+  const dur = formatDuration(stats.durationMs, t)
+  if (dur !== null) parts.push('⏱ ' + dur)
+  if (typeof stats.tokens === 'number' && stats.tokens > 0) parts.push('⚡ ' + formatTokens(stats.tokens) + ' tokens')
+  if (typeof stats.steps === 'number' && stats.steps > 0) parts.push('🔧 ' + stats.steps + ' steps')
+  return parts.join(' · ')
+}
+
+function runStatsFor(sessions, sessionId) {
+  if (sessions === undefined || typeof sessions.binding !== 'function') return null
+  try {
+    const binding = sessions.binding(sessionId)
+    if (!binding || !binding.session || typeof binding.session.getSnapshot !== 'function') return null
+    return summarizeRun(binding.session.getSnapshot())
+  } catch (err) {
+    return null
+  }
+}
+
 // ---------- Toast 组件 ----------
 function ToastItem(props) {
   const { toast, index, onClose, onOpen, t } = props
@@ -308,6 +398,10 @@ function ToastItem(props) {
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       },
     }, toast.title),
+    toast.statsLine
+      ? h('div', { style: { marginTop: 4, color: '#7dd3a8', fontSize: 12, whiteSpace: 'nowrap' } }, toast.statsLine)
+      : null,
+    h('div', { style: { marginTop: 3, color: 'rgba(242,244,248,0.45)', fontSize: 11 } }, t('clickHint')),
   )
 }
 
@@ -337,30 +431,32 @@ function ToastHost(props) {
     const visible = document.visibilityState === 'visible'
     for (const ev of events) {
       if (cfg.sound) chime(cfg.volume)
+      const stats = runStatsFor(sessions, ev.sessionId)
+      const statsLine = buildStatsLine(stats, t)
       if (visible) {
-        pushToast(ev, TOAST_MS)
+        pushToast(ev, statsLine, TOAST_MS)
       } else if (cfg.systemNotify) {
         const shown = showSystemNotification({
           title: t('doneTitle'),
-          body: ev.title,
+          body: ev.title + (statsLine ? '\n' + statsLine : ''),
           tag: ev.sessionId,
           silent: Boolean(cfg.sound), // 音效由我们播放，避免系统通知双重出声
           onClick: () => openSession(ev.sessionId),
         })
         if (shown) flashTitle('⚠ ' + t('doneTitle'))
-        else pushToast(ev, TOAST_MS_BG) // 系统通知不可达 → 长时 toast 兜底
+        else pushToast(ev, statsLine, TOAST_MS_BG) // 系统通知不可达 → 长时 toast 兜底
       } else {
         flashTitle('⚠ ' + t('doneTitle'))
-        pushToast(ev, TOAST_MS_BG)
+        pushToast(ev, statsLine, TOAST_MS_BG)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap])
 
-  function pushToast(ev, duration) {
+  function pushToast(ev, statsLine, duration) {
     setToasts((prev) => {
       const tail = prev.slice(-(MAX_TOASTS - 1)) // 保留 N-1 条 + 新 1 条 = 最多 MAX_TOASTS 条
-      return tail.concat([{ key: ev.sessionId + ':' + Date.now(), sessionId: ev.sessionId, title: ev.title, duration }])
+      return tail.concat([{ key: ev.sessionId + ':' + Date.now(), sessionId: ev.sessionId, title: ev.title, statsLine, duration }])
     })
   }
   function closeToast(key) {
@@ -485,7 +581,7 @@ exports.apply = function apply(ctx) {
 }
 
 // 单测钩子（客户端宿主会忽略该额外导出）
-exports.__test = { createWatcher }
+exports.__test = { createWatcher, summarizeRun, formatDuration, formatTokens, buildStatsLine }
 
 return module.exports;
 } });
