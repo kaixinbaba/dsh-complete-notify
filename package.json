@@ -1,6 +1,6 @@
 {
   "name": "dsh-complete-notify",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "任务完成时播放提示音并弹出小通知（页面内 toast + 后台时系统通知），按结果状态着色（完成/阻塞等待反馈/中断/失败），附带一句话小结（recap）与运行统计（时长/tokens/步骤）。纯浏览器方案，零系统依赖，跨 Windows/macOS/Linux。",
   "type": "module",
   "license": "MIT",
