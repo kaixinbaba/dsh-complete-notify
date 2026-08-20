@@ -99,7 +99,7 @@ npm run check        # 语法检查
 结构：
 
 ```
-lib/index.js      # 宿主半空壳（无逻辑）
+lib/index.js      # 宿主入口（事件监听、recap LLM 与路由装配）
 client/client.js  # 客户端单文件（DSH 模块加载器格式；全部逻辑在此）
 cordis.patch.yml  # bundle insert 声明
 tests/            # node --test 单测

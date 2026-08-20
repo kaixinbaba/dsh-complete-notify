@@ -1,7 +1,8 @@
 {
   "name": "dsh-complete-notify",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "任务完成时播放提示音并弹出小通知（页面内 toast + 后台时系统通知），按结果状态着色（完成/阻塞等待反馈/中断/失败），支持按操作系统选择音效预设、三状态独立音效，附带一句话小结（recap）与运行统计（时长/tokens/步骤）。纯浏览器方案，零系统依赖，跨 Windows/macOS/Linux。",
+  "private": false,
   "type": "module",
   "license": "MIT",
   "author": "kaixinbaba",
@@ -15,6 +16,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.1.0-rc.6"
   },
   "files": [
     "lib",
@@ -62,8 +67,12 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test",
-    "check": "node --check client/client.js && node --check lib/index.js && node --check tests/helpers.js && node --check tests/watcher.test.js"
+    "check": "node --check client/client.js && node --check lib/index.js && node --check tests/helpers.js && node --check tests/watcher.test.js && node --check tests/integration/*.test.js && node --check scripts/verify-plugin.mjs && node --check scripts/smoke-install.mjs",
+    "test": "npm run check && node --test tests/*.test.js && npm run test:integration",
+    "test:integration": "node --test tests/integration/*.test.js",
+    "verify:plugin": "node scripts/verify-plugin.mjs . --level=standard",
+    "smoke:install": "node scripts/smoke-install.mjs .",
+    "prepack": "npm test && npm run verify:plugin"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

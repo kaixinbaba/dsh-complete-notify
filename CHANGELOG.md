@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1 — 2026-08-18
+
+- 工程规范：迁移至 DSH 插件 canonical standard，新增 Host/client 合约与装配集成测试、制品验证脚本、隔离安装 smoke 和 Node 22/24 CI。
+
 ## 0.6.0 — 2026-08-17
 
 - 新特性：根据当前操作系统提供音效预设下拉框（macOS / Windows / Linux 推荐 + 通用预设 + 静音）
